@@ -3,7 +3,7 @@
 **Data:** 28/09/2026
 
 ## Schermata finale di conferma
-- Dopo un invio riuscito compare una schermata dedicata "Grazie, invio completato", con spunta animata, data e ora dell'invio e la frase "Non serve inviarla di nuovo".
+- Dopo un invio riuscito compare una schermata dedicata "Grazie, invio completato", con spunta animata, data e ora dell'invio e la conferma che i dati saranno registrati nell'anagrafe del condominio; in fondo il promemoria sulle variazioni da comunicare entro 60 giorni.
 - Sotto, il riepilogo completo dei dati inviati: condominio, unità immobiliari (posizione, destinazione, dati catastali), dati anagrafici, recapiti e modalità di corrispondenza.
 - Nessun numero di protocollo a schermo (il codice continua a essere trasmesso a Make come prima).
 - Pulsante "Stampa o salva il riepilogo" (stampa pulita, senza intestazione e piè di pagina).

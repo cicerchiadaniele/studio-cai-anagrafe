@@ -894,7 +894,7 @@ function ConfermaInvio({ sent, onNuova, cooldown }) {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.4 }} className="relative">
           <h2 className="font-display font-semibold text-3xl sm:text-4xl text-white mt-7 leading-tight">Grazie, invio completato</h2>
           <p className="text-white/85 text-[15px] mt-3 max-w-md mx-auto leading-relaxed">
-            La tua scheda anagrafica è arrivata allo studio. <span className="font-semibold text-white">Non serve inviarla di nuovo.</span>
+            La tua scheda è arrivata allo studio e i dati saranno registrati nell'anagrafe del condominio.
           </p>
           <span className="inline-flex items-center gap-2 mt-5 px-4 py-1.5 rounded-full bg-white/12 ring-1 ring-white/25 text-white/90 text-xs font-medium">
             <Calendar className="w-3.5 h-3.5" />Inviata il {sent.quando}
@@ -964,7 +964,7 @@ function ConfermaInvio({ sent, onNuova, cooldown }) {
         </div>
 
         <p className="text-sm text-neutral-500 text-center mt-6 leading-relaxed">
-          Se noti un errore o i dati cambiano in futuro, compila una nuova scheda con i dati aggiornati.
+          Ricorda: ogni variazione (vendita, affitto, nuovi recapiti) va comunicata entro 60 giorni compilando una nuova scheda.
         </p>
 
         <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mt-5">
