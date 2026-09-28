@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, CheckCircle2, AlertCircle, Building2, Phone, Loader2,
   ChevronDown, ChevronRight, ChevronLeft, X, Info, User, MapPin,
-  Home, Shield, Layers, Mail, ExternalLink
+  Home, Shield, Layers, Mail, ExternalLink, RotateCcw
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Costanti
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = "1.1";
-const BUILD_DATE_LABEL = "23/09/2026"; // Data fissa della release, non cambia ogni giorno
+const APP_VERSION = "1.2";
+const BUILD_DATE_LABEL = "28/09/2026"; // Data fissa della release, non cambia ogni giorno
 const WEBHOOK_URL = "https://hook.eu1.make.com/k8agbjzwobv0b2myrdwtu06ztjdefvx8";
 const BRAND_NAME = "Studio CAI";
 const LOGO_URL = "/logo.jpg";
@@ -94,6 +94,7 @@ export default function AppAnagrafe() {
   const [showInfo, setShowInfo] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [step, setStep]         = useState(1);
+  const [sent, setSent]         = useState(null); // dati della scheda appena inviata → schermata finale
 
   React.useEffect(() => {
     if (!cooldown) return;
@@ -269,16 +270,33 @@ export default function AppAnagrafe() {
       Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v)));
       const res = await fetch(WEBHOOK_URL, { method: "POST", body: fd });
       if (!res.ok) throw new Error(`Errore invio: ${res.status}`);
-      setResult({ ok: true, ticket });
+      // Schermata finale di conferma: resta visibile finché l'utente non sceglie di compilare una nuova scheda
+      setSent({
+        ticket,
+        quando: new Date().toLocaleString("it-IT", { dateStyle: "long", timeStyle: "short" }),
+        condominio: form.condominio,
+        nome: form.nome,
+        email: form.email1,
+        unita: form.unita.length,
+      });
+      setResult(null);
       setCooldown(10);
       setForm(initForm());
       setTouched({});
       setStep(1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setResult({ ok: false, error: e.message || "Invio non riuscito. Riprova." });
     } finally {
       setSending(false);
     }
+  };
+
+  const nuovaScheda = () => {
+    setSent(null);
+    setResult(null);
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const destinazioneLabel = (u) => u.destinazione === "Altro" ? u.destinazioneAltro : u.destinazione;
@@ -346,6 +364,9 @@ export default function AppAnagrafe() {
       {/* ── Main ── */}
       <main className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-10">
 
+        {sent ? (
+          <ConfermaInvio sent={sent} onNuova={nuovaScheda} cooldown={cooldown} />
+        ) : (<>
         {/* Progress */}
         <div className="mb-6">
           <div className="hidden sm:flex items-center justify-between mb-2">
@@ -762,27 +783,6 @@ export default function AppAnagrafe() {
                       </label>
                     </div>
 
-                    {/* Successo */}
-                    <AnimatePresence>
-                      {result?.ok && (
-                        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                          className="rounded-2xl border p-5 shadow-soft bg-gradient-to-br from-brand/8 to-white border-brand/30 flex items-start gap-4">
-                          <div className="w-11 h-11 rounded-2xl bg-brand/12 flex items-center justify-center flex-shrink-0">
-                            <CheckCircle2 className="w-6 h-6 text-brand-dark" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-display font-semibold text-brand-deep text-lg leading-tight">Scheda inviata correttamente</p>
-                            <p className="text-sm text-neutral-600 mt-1">La scheda anagrafica è stata trasmessa all'amministratore.</p>
-                            {result.ticket && (
-                              <div className="mt-3 bg-white rounded-xl px-4 py-3 ring-1 ring-brand/20">
-                                <p className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1 font-semibold">Numero protocollo</p>
-                                <p className="font-mono font-bold text-brand-dark text-lg tracking-tight select-all break-all">{result.ticket}</p>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
                 )}
 
@@ -802,7 +802,7 @@ export default function AppAnagrafe() {
                   className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-brand to-brand-dark text-white text-sm font-semibold shadow hover:shadow-md transition-all">
                   Avanti<ChevronRight className="w-4 h-4" />
                 </button>
-              ) : !result?.ok ? (
+              ) : (
                 <motion.button
                   disabled={sending || cooldown > 0}
                   onClick={submit}
@@ -817,16 +817,12 @@ export default function AppAnagrafe() {
                     ? <><Loader2 className="w-4 h-4 animate-spin" />Invio…</>
                     : <><Send className="w-4 h-4" />Invia scheda</>}
                 </motion.button>
-              ) : null}
+              )}
             </div>
 
-            {cooldown > 0 && (
-              <p className="mt-2 text-xs text-neutral-500 text-right">
-                Prossimo invio tra <span className="font-semibold text-brand">{cooldown}s</span>
-              </p>
-            )}
           </div>
         </motion.div>
+        </>)}
       </main>
 
       {/* Recapiti dello studio (per il condomino) */}
@@ -858,6 +854,66 @@ export default function AppAnagrafe() {
 // ─────────────────────────────────────────────────────────────
 // Sub-components
 // ─────────────────────────────────────────────────────────────
+function ConfermaInvio({ sent, onNuova, cooldown }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.4 }}
+      className="bg-white rounded-3xl shadow-lift overflow-hidden ring-1 ring-neutral-200/80"
+      role="status" aria-live="polite"
+    >
+      <div className="relative overflow-hidden bg-gradient-to-br from-brand via-brand-dark to-brand-deep px-6 sm:px-8 py-10 text-center">
+        <div aria-hidden="true" className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 50%, white 1px, transparent 1px)", backgroundSize: "32px 32px", backgroundPosition: "0 0, 16px 16px" }}
+        />
+        <motion.div
+          initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.15 }}
+          className="relative mx-auto w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-lg"
+        >
+          <CheckCircle2 className="w-12 h-12 text-brand" strokeWidth={2.2} />
+        </motion.div>
+        <h2 className="relative font-display font-semibold text-2xl sm:text-3xl text-white mt-5 leading-tight">Scheda inviata correttamente</h2>
+        <p className="relative text-white/80 text-sm mt-2">La tua scheda anagrafica è stata ricevuta dallo studio. Non serve inviarla di nuovo.</p>
+      </div>
+
+      <div className="p-6 sm:p-8 space-y-5">
+        <div className="rounded-2xl bg-brand/5 ring-1 ring-brand/20 px-5 py-4 text-center">
+          <p className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1 font-semibold">Numero di protocollo</p>
+          <p className="font-mono font-bold text-brand-dark text-2xl tracking-tight select-all break-all">{sent.ticket}</p>
+          <p className="text-xs text-neutral-500 mt-1">Conservalo: ti servirà per eventuali comunicazioni con lo studio.</p>
+        </div>
+
+        <SummaryBlock title="Riepilogo invio" icon={<Shield className="w-4 h-4" />}>
+          <Row label="Inviata il" value={sent.quando} />
+          <Row label="Condominio" value={sent.condominio} />
+          <Row label="Dichiarante" value={sent.nome} />
+          <Row label="Unità" value={String(sent.unita)} />
+          <Row label="E-mail" value={sent.email} />
+        </SummaryBlock>
+
+        <p className="text-sm text-neutral-600 text-center">
+          Puoi chiudere questa pagina. Per variazioni future dei dati compila una nuova scheda.
+        </p>
+
+        <div className="flex justify-center">
+          <button
+            onClick={onNuova}
+            disabled={cooldown > 0}
+            className={cn(
+              "flex items-center gap-2 px-5 py-3 rounded-2xl border-2 text-sm font-semibold transition-all",
+              cooldown > 0
+                ? "border-neutral-200 text-neutral-400 cursor-not-allowed"
+                : "border-brand/30 text-brand hover:border-brand/60 hover:bg-brand/5"
+            )}
+          >
+            <RotateCcw className="w-4 h-4" />
+            {cooldown > 0 ? `Compila una nuova scheda (${cooldown}s)` : "Compila una nuova scheda"}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function TF({ label, value, onChange, placeholder, type = "text", icon, required, error, hint }) {
   return (
     <div>
