@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, CheckCircle2, AlertCircle, Building2, Phone, Loader2,
   ChevronDown, ChevronRight, ChevronLeft, X, Info, User, MapPin,
-  Home, Shield, Layers, Mail, ExternalLink, RotateCcw
+  Home, Shield, Layers, Mail, ExternalLink, RotateCcw, Printer, Calendar
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -272,12 +272,8 @@ export default function AppAnagrafe() {
       if (!res.ok) throw new Error(`Errore invio: ${res.status}`);
       // Schermata finale di conferma: resta visibile finché l'utente non sceglie di compilare una nuova scheda
       setSent({
-        ticket,
         quando: new Date().toLocaleString("it-IT", { dateStyle: "long", timeStyle: "short" }),
-        condominio: form.condominio,
-        nome: form.nome,
-        email: form.email1,
-        unita: form.unita.length,
+        dati: { ...form, unita: form.unita.map((u) => ({ ...u })) },
       });
       setResult(null);
       setCooldown(10);
@@ -307,7 +303,7 @@ export default function AppAnagrafe() {
   return (
     <div className="relative min-h-screen w-full bg-paper bg-noise text-neutral-900" style={cssVars}>
       {/* Background blobs */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+      <div aria-hidden="true" className="no-print pointer-events-none fixed inset-0 overflow-hidden z-0">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand/10 blur-3xl" />
         <div className="absolute top-1/2 -right-40 w-96 h-96 rounded-full bg-brand/10 blur-3xl" />
       </div>
@@ -826,7 +822,7 @@ export default function AppAnagrafe() {
       </main>
 
       {/* Recapiti dello studio (per il condomino) */}
-      <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 -mb-4 flex items-center justify-center gap-2 text-xs text-neutral-500 text-center">
+      <div className="no-print relative z-10 max-w-3xl mx-auto px-4 sm:px-6 -mb-4 flex items-center justify-center gap-2 text-xs text-neutral-500 text-center">
         <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
         <span>Via Don Rua 39, Roma · <Phone className="inline w-3 h-3 -mt-0.5" /> 06 7835 9769</span>
       </div>
@@ -855,62 +851,173 @@ export default function AppAnagrafe() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────
 function ConfermaInvio({ sent, onNuova, cooldown }) {
+  const f = sent.dati;
+  const dest = (u) => (u.destinazione === "Altro" ? u.destinazioneAltro : u.destinazione);
+  const dataIt = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "");
+  const joinNz = (arr, sep = ", ") => arr.filter(Boolean).join(sep);
+  const modalita = MODALITA.find((m) => m.key === f.modalita)?.label;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.4 }}
-      className="bg-white rounded-3xl shadow-lift overflow-hidden ring-1 ring-neutral-200/80"
-      role="status" aria-live="polite"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}
+      className="space-y-5" role="status" aria-live="polite"
     >
-      <div className="relative overflow-hidden bg-gradient-to-br from-brand via-brand-dark to-brand-deep px-6 sm:px-8 py-10 text-center">
-        <div aria-hidden="true" className="absolute inset-0 opacity-20"
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand via-brand-dark to-brand-deep shadow-lift px-6 sm:px-10 pt-12 pb-10 text-center">
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.15]"
           style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 50%, white 1px, transparent 1px)", backgroundSize: "32px 32px", backgroundPosition: "0 0, 16px 16px" }}
         />
-        <motion.div
-          initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.15 }}
-          className="relative mx-auto w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-lg"
-        >
-          <CheckCircle2 className="w-12 h-12 text-brand" strokeWidth={2.2} />
-        </motion.div>
-        <h2 className="relative font-display font-semibold text-2xl sm:text-3xl text-white mt-5 leading-tight">Scheda inviata correttamente</h2>
-        <p className="relative text-white/80 text-sm mt-2">La tua scheda anagrafica è stata ricevuta dallo studio. Non serve inviarla di nuovo.</p>
-      </div>
+        <div aria-hidden="true" className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+        <div aria-hidden="true" className="absolute -bottom-28 -left-20 w-72 h-72 rounded-full bg-black/20 blur-3xl" />
 
-      <div className="p-6 sm:p-8 space-y-5">
-        <div className="rounded-2xl bg-brand/5 ring-1 ring-brand/20 px-5 py-4 text-center">
-          <p className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1 font-semibold">Numero di protocollo</p>
-          <p className="font-mono font-bold text-brand-dark text-2xl tracking-tight select-all break-all">{sent.ticket}</p>
-          <p className="text-xs text-neutral-500 mt-1">Conservalo: ti servirà per eventuali comunicazioni con lo studio.</p>
+        <div className="relative mx-auto w-24 h-24">
+          <motion.span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full bg-white/25"
+            initial={{ scale: 0.6, opacity: 0.8 }} animate={{ scale: 1.6, opacity: 0 }}
+            transition={{ duration: 1.6, repeat: 2, ease: "easeOut", delay: 0.4 }}
+          />
+          <motion.div
+            initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 240, damping: 16, delay: 0.15 }}
+            className="relative w-24 h-24 rounded-full bg-white shadow-xl ring-8 ring-white/15 flex items-center justify-center"
+          >
+            <svg viewBox="0 0 52 52" className="w-12 h-12" aria-hidden="true">
+              <motion.path
+                d="M14 27 L23 36 L39 18" fill="none" stroke={PRIMARY} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"
+                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, delay: 0.45, ease: "easeOut" }}
+              />
+            </svg>
+          </motion.div>
         </div>
 
-        <SummaryBlock title="Riepilogo invio" icon={<Shield className="w-4 h-4" />}>
-          <Row label="Inviata il" value={sent.quando} />
-          <Row label="Condominio" value={sent.condominio} />
-          <Row label="Dichiarante" value={sent.nome} />
-          <Row label="Unità" value={String(sent.unita)} />
-          <Row label="E-mail" value={sent.email} />
-        </SummaryBlock>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.4 }} className="relative">
+          <h2 className="font-display font-semibold text-3xl sm:text-4xl text-white mt-7 leading-tight">Grazie, invio completato</h2>
+          <p className="text-white/85 text-[15px] mt-3 max-w-md mx-auto leading-relaxed">
+            La tua scheda anagrafica è arrivata allo studio. <span className="font-semibold text-white">Non serve inviarla di nuovo.</span>
+          </p>
+          <span className="inline-flex items-center gap-2 mt-5 px-4 py-1.5 rounded-full bg-white/12 ring-1 ring-white/25 text-white/90 text-xs font-medium">
+            <Calendar className="w-3.5 h-3.5" />Inviata il {sent.quando}
+          </span>
+        </motion.div>
+      </div>
 
-        <p className="text-sm text-neutral-600 text-center">
-          Puoi chiudere questa pagina. Per variazioni future dei dati compila una nuova scheda.
+      {/* Riepilogo */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.4 }}
+        className="bg-white rounded-3xl shadow-lift ring-1 ring-neutral-200/80 p-5 sm:p-8"
+      >
+        <div className="flex items-center gap-3 mb-5">
+          <div className="h-px flex-1 bg-neutral-200" />
+          <p className="font-display text-lg font-semibold text-neutral-800">Riepilogo dei dati inviati</p>
+          <div className="h-px flex-1 bg-neutral-200" />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <RecapCard title="Condominio" icon={Building2} full>
+            <p className="text-[15px] font-semibold text-neutral-900">{f.condominio}</p>
+          </RecapCard>
+
+          <RecapCard title={f.unita.length > 1 ? `Unità immobiliari (${f.unita.length})` : "Unità immobiliare"} icon={Home} full>
+            <div className={cn("grid gap-3", f.unita.length > 1 && "sm:grid-cols-2")}>
+              {f.unita.map((u, i) => {
+                const pos = joinNz([u.palazzina && `Pal. ${u.palazzina}`, u.scala && `Sc. ${u.scala}`, u.piano && `Piano ${u.piano}`, u.interno && `Int. ${u.interno}`], " · ");
+                const cat = joinNz([u.zona && `Z. ${u.zona}`, u.foglio && `Fg. ${u.foglio}`, u.particella && `Part. ${u.particella}`, u.sub && `Sub ${u.sub}`, u.categoria && `Cat. ${u.categoria}`, u.classe && `Cl. ${u.classe}`], " · ");
+                return (
+                  <div key={i} className="rounded-2xl bg-white ring-1 ring-neutral-200 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-brand uppercase tracking-wider">{i + 1}ª unità</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-brand/10 text-brand text-xs font-semibold">{dest(u)}</span>
+                    </div>
+                    {pos && <p className="text-sm text-neutral-800 font-medium mt-1.5">{pos}</p>}
+                    {cat && <p className="text-xs text-neutral-500 mt-1">Catasto: {cat}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </RecapCard>
+
+          <RecapCard title="Dati anagrafici" icon={User}>
+            <Voce label="Nome e cognome" value={f.nome} strong />
+            <Voce label="Nascita" value={joinNz([f.luogoNascita, dataIt(f.dataNascita)], ", ")} />
+            <Voce label="Codice fiscale" value={f.codiceFiscale} mono />
+            <Voce label="Residenza" value={joinNz([f.indirizzoResidenza, f.comuneResidenza])} />
+            <Voce label="Domicilio" value={joinNz([f.indirizzoDomicilio, f.comuneDomicilio])} />
+            <Voce label="In qualità di" value={f.qualitaPF + (f.percentuale ? ` (${f.percentuale}%)` : f.altroDiritto ? ` – ${f.altroDiritto}` : "")} />
+          </RecapCard>
+
+          <RecapCard title="Recapiti" icon={Phone}>
+            <Voce label="Titolare" value={f.nomeRecapiti} strong />
+            <Voce label="Telefono" value={joinNz([f.tel1, f.tel2, f.tel3])} />
+            <Voce label="E-mail" value={joinNz([f.email1, f.email2, f.email3])} />
+            <Voce label="PEC" value={joinNz([f.pec1, f.pec2])} />
+            <Voce label="Altro" value={f.altroRecapito} />
+          </RecapCard>
+
+          <RecapCard title="Corrispondenza" icon={Mail} full>
+            <Voce label="Modalità" value={modalita} strong />
+            {f.modalita === "racc_altro" && (
+              <Voce label="Indirizzo" value={joinNz([f.indirizzoRacc, joinNz([f.capRacc, f.cittaRacc, f.provRacc && `(${f.provRacc})`], " ")])} />
+            )}
+            {f.modalita === "pec" && <Voce label="Indirizzo PEC" value={f.pec1} />}
+          </RecapCard>
+        </div>
+
+        <p className="text-sm text-neutral-500 text-center mt-6 leading-relaxed">
+          Se noti un errore o i dati cambiano in futuro, compila una nuova scheda con i dati aggiornati.
         </p>
 
-        <div className="flex justify-center">
+        <div className="no-print flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 mt-5">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-brand to-brand-dark text-white text-sm font-semibold shadow hover:shadow-md transition-all"
+          >
+            <Printer className="w-4 h-4" />Stampa o salva il riepilogo
+          </button>
           <button
             onClick={onNuova}
             disabled={cooldown > 0}
             className={cn(
-              "flex items-center gap-2 px-5 py-3 rounded-2xl border-2 text-sm font-semibold transition-all",
+              "flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 text-sm font-semibold transition-all",
               cooldown > 0
                 ? "border-neutral-200 text-neutral-400 cursor-not-allowed"
                 : "border-brand/30 text-brand hover:border-brand/60 hover:bg-brand/5"
             )}
           >
             <RotateCcw className="w-4 h-4" />
-            {cooldown > 0 ? `Compila una nuova scheda (${cooldown}s)` : "Compila una nuova scheda"}
+            {cooldown > 0 ? `Nuova scheda (${cooldown}s)` : "Compila una nuova scheda"}
           </button>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
+  );
+}
+
+function RecapCard({ title, icon: Icon, full, children }) {
+  return (
+    <div className={cn("rounded-2xl bg-gradient-to-br from-neutral-50 to-white ring-1 ring-neutral-200 p-4 sm:p-5", full && "sm:col-span-2")}>
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center">
+          <Icon className="w-4 h-4" />
+        </span>
+        <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">{title}</p>
+      </div>
+      <div className="space-y-2.5">{children}</div>
+    </div>
+  );
+}
+
+function Voce({ label, value, strong, mono }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wider text-neutral-400 font-semibold">{label}</p>
+      <p className={cn(
+        "text-sm text-neutral-800 break-words",
+        strong && "font-semibold text-neutral-900",
+        mono && "font-mono tracking-tight"
+      )}>{value}</p>
+    </div>
   );
 }
 

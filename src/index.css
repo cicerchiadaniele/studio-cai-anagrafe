@@ -75,3 +75,12 @@
   input[type="date"]::-webkit-datetime-edit, input[type="time"]::-webkit-datetime-edit,
   input[type="datetime-local"]::-webkit-datetime-edit { padding: 0; }
 }
+
+/* Stampa del riepilogo finale */
+@media print {
+  header, footer, .no-print { display: none !important; }
+  body, .bg-paper { background: #fff !important; }
+  .shadow-lift, .shadow-xl, .shadow { box-shadow: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { padding-top: 0 !important; }
+}
