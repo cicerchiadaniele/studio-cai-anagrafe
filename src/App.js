@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, CheckCircle2, AlertCircle, Building2, Phone, Loader2,
   ChevronDown, ChevronRight, ChevronLeft, X, Info, User, MapPin,
-  Home, Shield, Layers, Mail, ExternalLink, RotateCcw, Printer, Calendar
+  Home, Shield, Layers, Mail, ExternalLink, RotateCcw, Printer, Calendar, FileClock
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // Costanti
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 const BUILD_DATE_LABEL = "28/09/2026"; // Data fissa della release, non cambia ogni giorno
 const WEBHOOK_URL = "https://hook.eu1.make.com/k8agbjzwobv0b2myrdwtu06ztjdefvx8";
 const BRAND_NAME = "Studio CAI";
@@ -23,6 +23,46 @@ const GDPR_URL = "https://www.dropbox.com/scl/fi/57wzvnnkfz96j3t6ts7r2/INFORMATI
 const cn = (...cls) => cls.filter(Boolean).join(" ");
 
 const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v || "").trim());
+
+// Codice fiscale: formato (con omocodia) + carattere di controllo
+const CF_ODD = {
+  0: 1, 1: 0, 2: 5, 3: 7, 4: 9, 5: 13, 6: 15, 7: 17, 8: 19, 9: 21,
+  A: 1, B: 0, C: 5, D: 7, E: 9, F: 13, G: 15, H: 17, I: 19, J: 21, K: 2, L: 4, M: 18,
+  N: 20, O: 11, P: 3, Q: 6, R: 8, S: 12, T: 14, U: 16, V: 10, W: 22, X: 25, Y: 24, Z: 23,
+};
+const cfEven = (c) => (/\d/.test(c) ? Number(c) : c.charCodeAt(0) - 65);
+const CF_RE = /^[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]$/;
+const isValidCF = (cf) => {
+  if (!cf || cf.length !== 16 || !CF_RE.test(cf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 15; i++) sum += i % 2 === 0 ? CF_ODD[cf[i]] : cfEven(cf[i]);
+  return String.fromCharCode(65 + (sum % 26)) === cf[15];
+};
+const cfError = (cf) => {
+  if (!cf) return null;
+  if (cf.length < 16) return "Il codice fiscale deve avere 16 caratteri";
+  if (!isValidCF(cf)) return "Codice fiscale non corretto: controlla di averlo digitato bene";
+  return null;
+};
+
+// Bozza salvata sul dispositivo (scade dopo 7 giorni)
+const DRAFT_KEY = "studiocai-anagrafe-bozza";
+const DRAFT_TTL = 7 * 24 * 60 * 60 * 1000;
+const readDraft = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (!d || !d.form || Date.now() - d.savedAt > DRAFT_TTL) { localStorage.removeItem(DRAFT_KEY); return null; }
+    return d;
+  } catch { return null; }
+};
+const writeDraft = (form, step) => {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ form: { ...form, consenso: false }, step, savedAt: Date.now() })); } catch {}
+};
+const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch {} };
+const isFormEmpty = (f) => {
+  const base = initFormBase();
+  return JSON.stringify({ ...f, consenso: false }) === JSON.stringify(base);
+};
 
 const S = {
   nome:      (v) => v.replace(/[^\p{L}\s'-]/gu, ""),
@@ -75,6 +115,8 @@ const initForm = () => ({
   consenso: false,
 });
 
+const initFormBase = () => initForm();
+
 const STEPS = [
   { id: 1, label: "Condominio e unità", icon: Home },
   { id: 2, label: "Dati anagrafici",    icon: User },
@@ -95,6 +137,29 @@ export default function AppAnagrafe() {
   const [cooldown, setCooldown] = useState(0);
   const [step, setStep]         = useState(1);
   const [sent, setSent]         = useState(null); // dati della scheda appena inviata → schermata finale
+  const [draft, setDraft]       = useState(() => readDraft()); // compilazione in sospeso trovata all'apertura
+
+  // Salvataggio automatico della compilazione (solo dopo aver scelto se riprendere l'eventuale bozza)
+  React.useEffect(() => {
+    if (draft || sent) return;
+    if (isFormEmpty(form)) return;
+    const t = setTimeout(() => writeDraft(form, step), 400);
+    return () => clearTimeout(t);
+  }, [form, step, draft, sent]);
+
+  // Con una bozza in sospeso la pagina si apre dall'alto, così l'avviso è subito visibile
+  React.useEffect(() => {
+    if (!draft) return;
+    try { if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual"; } catch {}
+    window.scrollTo(0, 0);
+  }, []);
+
+  const riprendiBozza = () => {
+    setForm({ ...initForm(), ...draft.form, consenso: false });
+    setStep(draft.step || 1);
+    setDraft(null);
+  };
+  const scartaBozza = () => { clearDraft(); setDraft(null); };
 
   React.useEffect(() => {
     if (!cooldown) return;
@@ -144,7 +209,7 @@ export default function AppAnagrafe() {
       "nomeRecapiti", "tel1", "email1", "modalita",
     ];
     if (obbligatori.includes(f) && !v) return "Campo obbligatorio";
-    if (f === "codiceFiscale" && v && v.length < 16) return "CF non valido (16 caratteri)";
+    if (f === "codiceFiscale" && v) return cfError(v);
     if (f === "percentuale" && form.qualitaPF === "Comproprietario" && !v) return "Indica la percentuale";
     if (f === "altroDiritto" && form.qualitaPF === "Titolare di altro diritto reale" && !v) return "Specifica il titolo";
     if (["email1", "email2", "email3", "pec1", "pec2"].includes(f) && v && !isValidEmail(v)) return "Indirizzo e-mail non valido";
@@ -174,7 +239,8 @@ export default function AppAnagrafe() {
     }
     if (s === 2) {
       if (!form.nome) e.push("Inserisci nome e cognome");
-      if (!form.codiceFiscale || form.codiceFiscale.length < 16) e.push("Codice fiscale non valido (16 caratteri)");
+      if (!form.codiceFiscale) e.push("Inserisci il codice fiscale");
+      else if (cfError(form.codiceFiscale)) e.push(cfError(form.codiceFiscale));
       if (!form.luogoNascita) e.push("Inserisci luogo di nascita");
       if (!form.dataNascita) e.push("Inserisci data di nascita");
       if (!form.comuneResidenza) e.push("Inserisci comune di residenza");
@@ -239,6 +305,9 @@ export default function AppAnagrafe() {
     const errs = validateStep(step);
     if (errs.length) { setResult({ ok: false, error: errs[0] }); return; }
     setResult(null);
+    if (step === 2 && !form.nomeRecapiti && form.nome) {
+      setForm((f) => ({ ...f, nomeRecapiti: f.nome }));
+    }
     setStep((s) => Math.min(s + 1, 5));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -269,20 +338,28 @@ export default function AppAnagrafe() {
       };
       Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v)));
       const res = await fetch(WEBHOOK_URL, { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`Errore invio: ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       // Schermata finale di conferma: resta visibile finché l'utente non sceglie di compilare una nuova scheda
       setSent({
         quando: new Date().toLocaleString("it-IT", { dateStyle: "long", timeStyle: "short" }),
         dati: { ...form, unita: form.unita.map((u) => ({ ...u })) },
       });
       setResult(null);
+      clearDraft();
       setCooldown(10);
       setForm(initForm());
       setTouched({});
       setStep(1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
-      setResult({ ok: false, error: e.message || "Invio non riuscito. Riprova." });
+      console.error("Invio anagrafe non riuscito:", e);
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      setResult({
+        ok: false,
+        error: offline
+          ? "Sembra che il dispositivo non sia connesso a Internet. Controlla la connessione e premi di nuovo \"Invia scheda\": i dati inseriti non sono andati persi."
+          : "Invio non riuscito. Riprova tra qualche istante: i dati inseriti non sono andati persi. Se il problema continua chiama lo studio allo 06 7835 9769.",
+      });
     } finally {
       setSending(false);
     }
@@ -294,8 +371,6 @@ export default function AppAnagrafe() {
     setStep(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  const destinazioneLabel = (u) => u.destinazione === "Altro" ? u.destinazioneAltro : u.destinazione;
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -363,6 +438,39 @@ export default function AppAnagrafe() {
         {sent ? (
           <ConfermaInvio sent={sent} onNuova={nuovaScheda} cooldown={cooldown} />
         ) : (<>
+        {/* Compilazione in sospeso */}
+        <AnimatePresence>
+          {draft && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              className="mb-5 rounded-2xl bg-white ring-1 ring-brand/25 shadow-soft p-4 sm:p-5"
+            >
+              <div className="flex items-start gap-3">
+                <span className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center flex-shrink-0">
+                  <FileClock className="w-5 h-5" />
+                </span>
+                <div className="flex-1">
+                  <p className="font-semibold text-neutral-900">Hai una compilazione non terminata</p>
+                  <p className="text-sm text-neutral-600 mt-0.5">
+                    Salvata su questo dispositivo il {new Date(draft.savedAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+                    {draft.form?.condominio ? <> · {draft.form.condominio}</> : null}. Vuoi riprendere da dove eri rimasto?
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button onClick={riprendiBozza}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand to-brand-dark text-white text-sm font-semibold shadow hover:shadow-md transition-all">
+                      Riprendi
+                    </button>
+                    <button onClick={scartaBozza}
+                      className="px-4 py-2 rounded-xl border-2 border-neutral-200 text-neutral-700 text-sm font-semibold hover:border-neutral-300 hover:bg-neutral-50 transition-all">
+                      Ricomincia da capo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Progress */}
         <div className="mb-6">
           <div className="hidden sm:flex items-center justify-between mb-2">
@@ -705,46 +813,7 @@ export default function AppAnagrafe() {
                   <div className="space-y-5">
                     <p className="text-sm text-neutral-600">Verifica i dati inseriti prima di inviare la scheda.</p>
 
-                    <SummaryBlock title="Condominio" icon={<Building2 className="w-4 h-4" />}>
-                      <Row label="Condominio" value={form.condominio} />
-                    </SummaryBlock>
-
-                    <SummaryBlock title="Unità immobiliari" icon={<Home className="w-4 h-4" />}>
-                      {form.unita.map((u, i) => (
-                        <div key={i} className="text-sm space-y-0.5">
-                          <p className="font-semibold text-brand">{i + 1}ª Unità</p>
-                          {(u.palazzina || u.scala || u.piano || u.interno) && (
-                            <p className="text-neutral-700">
-                              {[u.palazzina && `Pal. ${u.palazzina}`, u.scala && `Sc. ${u.scala}`, u.piano && `P. ${u.piano}`, u.interno && `Int. ${u.interno}`].filter(Boolean).join(" · ")}
-                            </p>
-                          )}
-                          {u.destinazione && (
-                            <p className="text-neutral-500">Destinazione: <span className="text-neutral-700">{destinazioneLabel(u)}</span></p>
-                          )}
-                        </div>
-                      ))}
-                    </SummaryBlock>
-
-                    <SummaryBlock title="Dati anagrafici" icon={<User className="w-4 h-4" />}>
-                      <Row label="Nome" value={form.nome} />
-                      <Row label="Nato/a a" value={`${form.luogoNascita}${form.dataNascita ? " il " + new Date(form.dataNascita).toLocaleDateString("it-IT") : ""}`} />
-                      <Row label="Residenza" value={`${form.indirizzoResidenza}, ${form.comuneResidenza}`} />
-                      <Row label="C.F." value={form.codiceFiscale} />
-                      <Row label="Qualità" value={form.qualitaPF + (form.percentuale ? ` (${form.percentuale}%)` : form.altroDiritto ? ` – ${form.altroDiritto}` : "")} />
-                    </SummaryBlock>
-
-                    <SummaryBlock title="Recapiti" icon={<Phone className="w-4 h-4" />}>
-                      <Row label="Telefono" value={[form.tel1, form.tel2, form.tel3].filter(Boolean).join(", ")} />
-                      <Row label="E-mail" value={[form.email1, form.email2, form.email3].filter(Boolean).join(", ")} />
-                      {form.pec1 && <Row label="PEC" value={form.pec1} />}
-                    </SummaryBlock>
-
-                    <SummaryBlock title="Corrispondenza" icon={<Mail className="w-4 h-4" />}>
-                      <Row label="Modalità" value={MODALITA.find((m) => m.key === form.modalita)?.label || "—"} />
-                      {form.modalita === "racc_altro" && (
-                        <Row label="Indirizzo" value={`${form.indirizzoRacc}, ${form.capRacc} ${form.cittaRacc} ${form.provRacc}`} />
-                      )}
-                    </SummaryBlock>
+                    <RiepilogoDati f={form} />
 
                     {/* Privacy & Consenso */}
                     <div className="rounded-2xl bg-gradient-to-br from-neutral-50 to-white p-5 ring-1 ring-neutral-200 space-y-4">
@@ -852,10 +921,6 @@ export default function AppAnagrafe() {
 // ─────────────────────────────────────────────────────────────
 function ConfermaInvio({ sent, onNuova, cooldown }) {
   const f = sent.dati;
-  const dest = (u) => (u.destinazione === "Altro" ? u.destinazioneAltro : u.destinazione);
-  const dataIt = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "");
-  const joinNz = (arr, sep = ", ") => arr.filter(Boolean).join(sep);
-  const modalita = MODALITA.find((m) => m.key === f.modalita)?.label;
 
   return (
     <motion.div
@@ -913,55 +978,7 @@ function ConfermaInvio({ sent, onNuova, cooldown }) {
           <div className="h-px flex-1 bg-neutral-200" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <RecapCard title="Condominio" icon={Building2} full>
-            <p className="text-[15px] font-semibold text-neutral-900">{f.condominio}</p>
-          </RecapCard>
-
-          <RecapCard title={f.unita.length > 1 ? `Unità immobiliari (${f.unita.length})` : "Unità immobiliare"} icon={Home} full>
-            <div className={cn("grid gap-3", f.unita.length > 1 && "sm:grid-cols-2")}>
-              {f.unita.map((u, i) => {
-                const pos = joinNz([u.palazzina && `Pal. ${u.palazzina}`, u.scala && `Sc. ${u.scala}`, u.piano && `Piano ${u.piano}`, u.interno && `Int. ${u.interno}`], " · ");
-                const cat = joinNz([u.zona && `Z. ${u.zona}`, u.foglio && `Fg. ${u.foglio}`, u.particella && `Part. ${u.particella}`, u.sub && `Sub ${u.sub}`, u.categoria && `Cat. ${u.categoria}`, u.classe && `Cl. ${u.classe}`], " · ");
-                return (
-                  <div key={i} className="rounded-2xl bg-white ring-1 ring-neutral-200 px-4 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-brand uppercase tracking-wider">{i + 1}ª unità</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-brand/10 text-brand text-xs font-semibold">{dest(u)}</span>
-                    </div>
-                    {pos && <p className="text-sm text-neutral-800 font-medium mt-1.5">{pos}</p>}
-                    {cat && <p className="text-xs text-neutral-500 mt-1">Catasto: {cat}</p>}
-                  </div>
-                );
-              })}
-            </div>
-          </RecapCard>
-
-          <RecapCard title="Dati anagrafici" icon={User}>
-            <Voce label="Nome e cognome" value={f.nome} strong />
-            <Voce label="Nascita" value={joinNz([f.luogoNascita, dataIt(f.dataNascita)], ", ")} />
-            <Voce label="Codice fiscale" value={f.codiceFiscale} mono />
-            <Voce label="Residenza" value={joinNz([f.indirizzoResidenza, f.comuneResidenza])} />
-            <Voce label="Domicilio" value={joinNz([f.indirizzoDomicilio, f.comuneDomicilio])} />
-            <Voce label="In qualità di" value={f.qualitaPF + (f.percentuale ? ` (${f.percentuale}%)` : f.altroDiritto ? ` – ${f.altroDiritto}` : "")} />
-          </RecapCard>
-
-          <RecapCard title="Recapiti" icon={Phone}>
-            <Voce label="Titolare" value={f.nomeRecapiti} strong />
-            <Voce label="Telefono" value={joinNz([f.tel1, f.tel2, f.tel3])} />
-            <Voce label="E-mail" value={joinNz([f.email1, f.email2, f.email3])} />
-            <Voce label="PEC" value={joinNz([f.pec1, f.pec2])} />
-            <Voce label="Altro" value={f.altroRecapito} />
-          </RecapCard>
-
-          <RecapCard title="Corrispondenza" icon={Mail} full>
-            <Voce label="Modalità" value={modalita} strong />
-            {f.modalita === "racc_altro" && (
-              <Voce label="Indirizzo" value={joinNz([f.indirizzoRacc, joinNz([f.capRacc, f.cittaRacc, f.provRacc && `(${f.provRacc})`], " ")])} />
-            )}
-            {f.modalita === "pec" && <Voce label="Indirizzo PEC" value={f.pec1} />}
-          </RecapCard>
-        </div>
+        <RiepilogoDati f={f} />
 
         <p className="text-sm text-neutral-500 text-center mt-6 leading-relaxed">
           Ricorda: ogni variazione (vendita, affitto, nuovi recapiti) va comunicata entro 60 giorni compilando una nuova scheda.
@@ -990,6 +1007,64 @@ function ConfermaInvio({ sent, onNuova, cooldown }) {
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+function RiepilogoDati({ f }) {
+  const dest = (u) => (u.destinazione === "Altro" ? u.destinazioneAltro : u.destinazione);
+  const dataIt = (d) => (d ? new Date(d).toLocaleDateString("it-IT") : "");
+  const joinNz = (arr, sep = ", ") => arr.filter(Boolean).join(sep);
+  const modalita = MODALITA.find((m) => m.key === f.modalita)?.label;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <RecapCard title="Condominio" icon={Building2} full>
+        <p className="text-[15px] font-semibold text-neutral-900">{f.condominio}</p>
+      </RecapCard>
+
+      <RecapCard title={f.unita.length > 1 ? `Unità immobiliari (${f.unita.length})` : "Unità immobiliare"} icon={Home} full>
+        <div className={cn("grid gap-3", f.unita.length > 1 && "sm:grid-cols-2")}>
+          {f.unita.map((u, i) => {
+            const pos = joinNz([u.palazzina && `Pal. ${u.palazzina}`, u.scala && `Sc. ${u.scala}`, u.piano && `Piano ${u.piano}`, u.interno && `Int. ${u.interno}`], " · ");
+            const cat = joinNz([u.zona && `Z. ${u.zona}`, u.foglio && `Fg. ${u.foglio}`, u.particella && `Part. ${u.particella}`, u.sub && `Sub ${u.sub}`, u.categoria && `Cat. ${u.categoria}`, u.classe && `Cl. ${u.classe}`], " · ");
+            return (
+              <div key={i} className="rounded-2xl bg-white ring-1 ring-neutral-200 px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-brand uppercase tracking-wider">{i + 1}ª unità</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-brand/10 text-brand text-xs font-semibold">{dest(u)}</span>
+                </div>
+                {pos && <p className="text-sm text-neutral-800 font-medium mt-1.5">{pos}</p>}
+                {cat && <p className="text-xs text-neutral-500 mt-1">Catasto: {cat}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </RecapCard>
+
+      <RecapCard title="Dati anagrafici" icon={User}>
+        <Voce label="Nome e cognome" value={f.nome} strong />
+        <Voce label="Nascita" value={joinNz([f.luogoNascita, dataIt(f.dataNascita)], ", ")} />
+        <Voce label="Codice fiscale" value={f.codiceFiscale} mono />
+        <Voce label="Residenza" value={joinNz([f.indirizzoResidenza, f.comuneResidenza])} />
+        <Voce label="Domicilio" value={joinNz([f.indirizzoDomicilio, f.comuneDomicilio])} />
+        <Voce label="In qualità di" value={f.qualitaPF + (f.percentuale ? ` (${f.percentuale}%)` : f.altroDiritto ? ` – ${f.altroDiritto}` : "")} />
+      </RecapCard>
+
+      <RecapCard title="Recapiti" icon={Phone}>
+        <Voce label="Titolare" value={f.nomeRecapiti} strong />
+        <Voce label="Telefono" value={joinNz([f.tel1, f.tel2, f.tel3])} />
+        <Voce label="E-mail" value={joinNz([f.email1, f.email2, f.email3])} />
+        <Voce label="PEC" value={joinNz([f.pec1, f.pec2])} />
+        <Voce label="Altro" value={f.altroRecapito} />
+      </RecapCard>
+
+      <RecapCard title="Corrispondenza" icon={Mail} full>
+        <Voce label="Modalità" value={modalita} strong />
+        {f.modalita === "racc_altro" && (
+          <Voce label="Indirizzo" value={joinNz([f.indirizzoRacc, joinNz([f.capRacc, f.cittaRacc, f.provRacc && `(${f.provRacc})`], " ")])} />
+        )}
+        {f.modalita === "pec" && <Voce label="Indirizzo PEC" value={f.pec1} />}
+      </RecapCard>
+    </div>
   );
 }
 
@@ -1083,28 +1158,6 @@ function SF({ label, value, onChange, options = [], required, error }) {
           <AlertCircle className="w-3 h-3" />{error}
         </motion.p>
       )}
-    </div>
-  );
-}
-
-function SummaryBlock({ title, icon, children }) {
-  return (
-    <div className="rounded-2xl bg-neutral-50 border border-neutral-200 p-4 space-y-2">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-6 h-6 rounded-lg bg-brand/10 text-brand flex items-center justify-center">{icon}</span>
-        <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">{title}</p>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Row({ label, value }) {
-  if (!value) return null;
-  return (
-    <div className="flex items-baseline gap-2 text-sm">
-      <span className="text-neutral-400 min-w-[80px] text-xs">{label}</span>
-      <span className="text-neutral-800 font-medium">{value}</span>
     </div>
   );
 }
