@@ -5,12 +5,13 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, X, Info, User, MapPin,
   Home, Shield, Layers, Mail, ExternalLink, RotateCcw, Printer, Calendar, FileClock
 } from "lucide-react";
+import { ServiziStudio } from "./ServiziStudio";
 
 // ─────────────────────────────────────────────────────────────
 // Costanti
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = "1.3";
-const BUILD_DATE_LABEL = "28/09/2026"; // Data fissa della release, non cambia ogni giorno
+const APP_VERSION = "1.4";
+const BUILD_DATE_LABEL = "29/09/2026"; // Data fissa della release, non cambia ogni giorno
 const WEBHOOK_URL = "https://hook.eu1.make.com/k8agbjzwobv0b2myrdwtu06ztjdefvx8";
 const BRAND_NAME = "Studio CAI";
 const LOGO_URL = "/logo.jpg";
@@ -890,13 +891,9 @@ export default function AppAnagrafe() {
         </>)}
       </main>
 
-      {/* Recapiti dello studio (per il condomino) */}
-      <div className="no-print relative z-10 max-w-3xl mx-auto px-4 sm:px-6 -mb-4 flex items-center justify-center gap-2 text-xs text-neutral-500 text-center">
-        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-        <span>Via Don Rua 39, Roma · <Phone className="inline w-3 h-3 -mt-0.5" /> 06 7835 9769</span>
-      </div>
-
       {/* Footer */}
+      <ServiziStudio className="no-print" />
+
       <footer className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-8">
         <div className="bg-white/70 backdrop-blur rounded-2xl ring-1 ring-neutral-200 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
