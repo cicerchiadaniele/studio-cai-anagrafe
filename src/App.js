@@ -10,7 +10,7 @@ import { ServiziStudio } from "./ServiziStudio";
 // ─────────────────────────────────────────────────────────────
 // Costanti
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.4.1";
 const BUILD_DATE_LABEL = "29/09/2026"; // Data fissa della release, non cambia ogni giorno
 const WEBHOOK_URL = "https://hook.eu1.make.com/k8agbjzwobv0b2myrdwtu06ztjdefvx8";
 const BRAND_NAME = "Studio CAI";

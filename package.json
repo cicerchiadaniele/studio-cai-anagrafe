@@ -1,6 +1,6 @@
 {
   "name": "studio-cai-anagrafe",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "dependencies": {
     "react": "^18.3.1",
